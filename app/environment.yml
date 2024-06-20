@@ -1,0 +1,8 @@
+name: sf_env
+channels:
+    - snowflake
+dependencies:
+    - snowflake-snowpark-python=1.16.0
+    - snowflake-ml-python=1.5.0
+    - pypdf2=2.10.5
+    - langchain=0.0.298
