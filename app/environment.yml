@@ -1,10 +1,9 @@
 name: sf_env
 channels:
-    - snowflake
+  - snowflake
 dependencies:
-    - python=3.11.*
-    - snowflake-snowpark-python=1.16.0
-    - snowflake-ml-python=1.5.0
-    - pypdf2=2.10.5
-    - langchain=0.0.298
-    - streamlit=1.31.1
+  - snowflake-snowpark-python=1.16.0
+  - snowflake-ml-python=1.5.0
+  - pypdf2=2.10.5
+  - langchain=0.0.298
+  - streamlit
