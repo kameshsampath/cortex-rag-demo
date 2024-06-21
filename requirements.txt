@@ -5,3 +5,4 @@ ipykernel==6.28.0
 PyPDF2==2.10.5
 langchain==0.0.298
 streamlit==1.31.1
+watchdog
