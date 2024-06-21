@@ -1,6 +1,3 @@
-import json
-import os
-import pandas as pd
 import streamlit as st
 from snowflake.snowpark.context import get_active_session
 from snowflake.snowpark.functions import col, sql_expr
@@ -59,10 +56,10 @@ def get_chat_history():
 
 def summarize_question_with_history(chat_history, question):
     prompt = f"""
-        Based on the chat history below and the question, generate a query that extend the question
+        Based on the chat history between and the question, generate a query that extend the question
         with the chat history provided. The query should be in natural language. 
         Answer with only the query. Do not add any explanation.
-        
+
         <chat_history>
         {chat_history}
         </chat_history>
@@ -80,11 +77,15 @@ def summarize_question_with_history(chat_history, question):
 
 
 def generate_prompt(question):
-    chat_history = get_chat_history()
     context_docs = ""
-    if len(chat_history) != 0:
-        summary = summarize_question_with_history(chat_history, question)
-        context_docs = fetch_similar_docs(summary)
+    chat_history = ""
+    if st.session_state.use_chat_history:
+        chat_history = get_chat_history()
+        if len(chat_history) != 0:
+            summary = summarize_question_with_history(chat_history, question)
+            context_docs = fetch_similar_docs(summary)
+        else:
+            context_docs = fetch_similar_docs(question)
     else:
         context_docs = fetch_similar_docs(question)
 
@@ -114,8 +115,27 @@ Answer:
 
 
 def generate_response(question):
-    prompt = generate_prompt(question)
+    if st.session_state.use_rag:
+        prompt = generate_prompt(question)
+        response = Complete(st.session_state.llm_model, prompt)
+    else:
+        prompt = f"""
+'[INST]
+You are very capable AI Assistant. Answer question contained between <question> and </question> tags.
+
+Answers should be concise.
+Answers should not exceed 100 words .
+Do not hallucinate. 
+
+If you don't have the information just say so.
+<question>  
+{question} 
+</question>
+[/INST]
+Answer: '
+        """
     response = Complete(st.session_state.llm_model, prompt)
+
     return response
 
 
@@ -125,55 +145,66 @@ def rag_docs():
     return docs_available
 
 
-st.title(":snowflake: Snowflake Chatbot 💬  --  LLM with RAG")
-st.sidebar.selectbox(
-    "Choose Model",
-    medium_llms + small_llms + large_llms,
-    key="llm_model",
-)
+def sidebar():
+    st.sidebar.selectbox(
+        "Choose Model",
+        medium_llms + small_llms + large_llms,
+        key="llm_model",
+    )
 
-st.sidebar.selectbox(
-    "Embedding Model",
-    ("snowflake-arctic-embed-m", "e5-base-v2"),
-    key="embed_model",
-)
+    st.sidebar.selectbox(
+        "Embedding Model",
+        ("snowflake-arctic-embed-m", "e5-base-v2"),
+        key="embed_model",
+    )
 
-st.sidebar.toggle(label="Use RAG", key="use_rag", value=True)
-st.sidebar.toggle(label="Debug", key="enable_debug")
-st.sidebar.button("Start Over", key="clear_conversation")
+    st.sidebar.toggle(label="Use RAG", key="use_rag", value=True)
+    st.sidebar.toggle(label="Use chat history", key="use_chat_history", value=True)
+    st.sidebar.toggle(label="Debug", key="enable_debug")
+    st.sidebar.button("Start Over", key="clear_conversation")
 
-if st.session_state.use_rag:
-    list_docs = []
-    for doc in rag_docs():
-        list_docs.append(doc["name"])
-    st.sidebar.dataframe(list_docs, use_container_width=True)
+    if st.session_state.use_rag:
+        list_docs = []
+        for doc in rag_docs():
+            list_docs.append(doc["name"])
+        st.sidebar.dataframe(list_docs, use_container_width=True)
 
 
-# Session State
-if (
-    st.session_state.clear_conversation or "messages" not in st.session_state.keys()
-):  # Initialize the chat message history
-    st.session_state.messages = [
-        {"role": "assistant", "content": "How can I help you ?"},
-    ]
+def chat_box():
+    # Session State
+    if (
+        st.session_state.clear_conversation or "messages" not in st.session_state.keys()
+    ):  # Initialize the chat message history
+        st.session_state.messages = [
+            {"role": "assistant", "content": "How can I help you ?"},
+        ]
 
-# Conversational History
-for message in st.session_state.messages:
-    if message["role"] == "system":
-        continue
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
+    # Conversational History
+    for message in st.session_state.messages:
+        if message["role"] == "system":
+            continue
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
 
-if prompt := st.chat_input():
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.write(prompt)
+    if prompt := st.chat_input():
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.write(prompt)
 
-# Generate a new response if last message is not from assistant
-if st.session_state.messages[-1]["role"] != "assistant":
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            response = generate_response(prompt)
-            st.write(response)
-    message = {"role": "assistant", "content": response}
-    st.session_state.messages.append(message)
+    # Generate a new response if last message is not from assistant
+    if st.session_state.messages[-1]["role"] != "assistant":
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                response = generate_response(prompt)
+                st.write(response)
+        message = {"role": "assistant", "content": response}
+        st.session_state.messages.append(message)
+
+
+def main():
+    sidebar()
+    chat_box()
+
+
+if __name__ == "__main__":
+    main()
